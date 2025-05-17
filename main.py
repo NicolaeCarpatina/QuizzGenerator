@@ -6,7 +6,7 @@ import os
 
 # === CONFIGURABLE UI CONSTANTS ===
 FONT_FAMILY = "Helvetica"
-FONT_SIZE_QUESTION = 16
+FONT_SIZE_QUESTION = 20
 FONT_SIZE_OPTION = 18
 FONT_SIZE_BUTTON = 14
 FONT_SIZE_SMALL = 11
@@ -18,7 +18,7 @@ FONT_SMALL = (FONT_FAMILY, FONT_SIZE_SMALL)
 
 DEFAULT_MENU_SIZE = "500x300"
 DEFAULT_QUIZ_SIZE = "1500x600"
-
+WINDOW_SIZE_FILE = "window_size.cfg"
 
 class Question:
     def __init__(self, text, options):
@@ -105,7 +105,27 @@ class QuizApp:
         self.center_window()
         self.main_menu()  # This will build the menu *without* the dark mode button initially
 
+    def load_window_size(self):
+        if os.path.exists(WINDOW_SIZE_FILE):
+            try:
+                with open(WINDOW_SIZE_FILE, "r") as f:
+                    size = f.read().strip()
+                    if 'x' in size:
+                        return size
+            except Exception:
+                pass
+        return DEFAULT_QUIZ_SIZE
+
+    def save_window_size(self):
+        try:
+            size = f"{self.root.winfo_width()}x{self.root.winfo_height()}"
+            with open(WINDOW_SIZE_FILE, "w") as f:
+                f.write(size)
+        except Exception as e:
+            print(f"Error saving window size: {e}")
+
     def on_closing(self):
+        self.save_window_size()
         self.stop_elapsed_timer()
         self.root.destroy()
 
@@ -212,7 +232,7 @@ class QuizApp:
 
         # Only create the button if NOT in menu mode
         if self.mode != 'menu':
-            btn_text = "🌙" if not self.dark_mode else "☀️"
+            btn_text = " 🌙 " if not self.dark_mode else " ☀ "
             self.dark_mode_button = ttk.Button(self.root, text=btn_text, command=self.toggle_theme, style="TButton",
                                                takefocus=0, state='normal')
             self.dark_mode_button.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=10)
@@ -268,7 +288,7 @@ class QuizApp:
         self.num_questions_entry.grid(row=1, column=1, pady=4)
 
         state = 'normal' if self.questions else 'disabled'
-        self.start_btn = ttk.Button(main_frame, text="🚀 Start Quiz", command=self.start_quiz, state=state,
+        self.start_btn = ttk.Button(main_frame, text="Start Quiz", command=self.start_quiz, state=state,
                                     style="TButton", takefocus=0)
         self.start_btn.pack(pady=8, fill='x')
 
@@ -308,7 +328,7 @@ class QuizApp:
             messagebox.showerror("Error", f"Please choose a number of questions between 1 and {len(self.questions)}.")
             return
 
-        self.root.geometry(DEFAULT_QUIZ_SIZE)
+        self.root.geometry(self.load_window_size())
         self.center_window()
         num_to_sample = min(num, len(self.questions))
         self.quiz_questions = random.sample(self.questions, num_to_sample)
@@ -401,7 +421,7 @@ class QuizApp:
 
         q = self.quiz_questions[self.current_question_index]
         question_label_wraplength = max(300, self.root.winfo_width() - 40)
-        ttk.Label(self.root, text=f"({q.type}) {q.text}",
+        ttk.Label(self.root, text=f"[{q.type}]{q.text}",
                   wraplength=question_label_wraplength, justify="left",
                   font=FONT_QUESTION).pack(
             pady=20, anchor='w', padx=20)
@@ -547,12 +567,13 @@ class QuizApp:
 
         self.add_dark_mode_button()  # Add the enabled button here
 
-        ttk.Label(self.root, text="🏆 Quiz Complete! 🏆", font=FONT_QUESTION).pack(pady=20)
+        ttk.Label(self.root, text="Quiz Complete!", font=FONT_QUESTION).pack(pady=20)
 
         actual_max_score = len(self.quiz_questions) * 5 if self.quiz_questions else 0
         ttk.Label(self.root, text=f"Total Score: {self.score} / {actual_max_score} points",
                   font=(FONT_FAMILY, 20, "bold")).pack(pady=5)
-        ttk.Label(self.root, text=f"Final grade: {(self.score / actual_max_score) * 9 + 1} / {10}",
+        final_grade = (self.score / actual_max_score) * 9 + 1
+        ttk.Label(self.root, text=f"Final grade: {final_grade:.2f} / {10}",
                   font=(FONT_FAMILY, 20, "bold")).pack(pady=5)
 
         hours, remainder = divmod(self.elapsed_seconds, 3600)
@@ -605,22 +626,11 @@ class QuizApp:
             user_ans_for_q = [0] * num_options
 
         question_label_wraplength = max(300, self.root.winfo_width() - 40)
-        ttk.Label(self.root, text=f"({q.type}): {q.text}", wraplength=question_label_wraplength, justify="left",
+        ttk.Label(self.root, text=f"[{q.type}]{q.text}", wraplength=question_label_wraplength, justify="left",
                   font=FONT_QUESTION).pack(pady=20, anchor='w', padx=20)
-
-        legend_frame = ttk.Frame(self.root)
-        legend_frame.pack(pady=(0, 10), padx=20, anchor='w', fill='x')
 
         label_bg_color = self.root.cget('bg')
         default_review_fg_color = self.default_fg_color
-
-        def create_legend_label(parent, text_symbol, specific_fg_color):
-            lbl = tk.Label(parent, text=text_symbol, font=FONT_SMALL, fg=specific_fg_color, bg=label_bg_color)
-            lbl.pack(side='left', padx=6)
-
-        create_legend_label(legend_frame, "✅ Correct", "green")
-        create_legend_label(legend_frame, "❌ Wrong", "red")
-        create_legend_label(legend_frame, "🟠 Missed", "orange")
 
         content_frame = ttk.Frame(self.root)
         content_frame.pack(fill='both', expand=True, padx=20, pady=10)
@@ -658,6 +668,17 @@ class QuizApp:
                                anchor='w', justify='left')
                 lbl.pack(anchor='w', padx=40, pady=2)
 
+        def create_legend_label(parent, text_symbol, specific_fg_color):
+            lbl = tk.Label(parent, text=text_symbol, font=FONT_SMALL, fg=specific_fg_color, bg=label_bg_color)
+            lbl.pack(side='left', padx=6)
+
+        legend_frame = ttk.Frame(self.root)
+        legend_frame.pack(pady=(0, 10), padx=20, anchor='w', fill='x')
+
+        create_legend_label(legend_frame, "✅ Correct", "green")
+        create_legend_label(legend_frame, "❌ Wrong", "red")
+        create_legend_label(legend_frame, "🟠 Missed", "orange")
+
         q_score_breakdown = self.scores_breakdown[index]
         max_q_score = 5
         ttk.Label(content_frame, text=f"Score for this question: {q_score_breakdown} / {max_q_score}",
@@ -686,6 +707,7 @@ class QuizApp:
 
     def start_another_quiz(self):
         # stop_elapsed_timer is called in show_score before this method
+        self.save_window_size()
         self.elapsed_seconds = 0  # Reset timer for the new quiz
         self.user_answers = []
         self.score = 0
@@ -696,6 +718,7 @@ class QuizApp:
         self.start_quiz()  # start_quiz calls show_question which starts the timer
 
     def back_to_menu(self):
+        self.save_window_size()
         self.stop_elapsed_timer()  # Stop timer when going back to menu
         self.elapsed_seconds = 0  # Reset timer for consistency, though not displayed in menu
         self.root.geometry(DEFAULT_MENU_SIZE)
@@ -751,7 +774,7 @@ class QuizApp:
         time_parts.append(f"{seconds}s")
 
         time_str = " ".join(time_parts) if time_parts else "0s"
-        display_text = f"⏱️ Time elapsed: {time_str}"
+        display_text = f" Time elapsed: {time_str}"
         try:
             self.timer_label.config(text=display_text)
         except tk.TclError as e:

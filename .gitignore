@@ -1,5 +1,4 @@
-/dist/
 /build/
-main.spec
-questions.text
-window_size.json
+/main.spec
+/questions.text
+/window_size.cfg
