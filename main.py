@@ -11,10 +11,11 @@ FONT_SIZE_OPTION = 18
 FONT_SIZE_BUTTON = 14
 FONT_SIZE_SMALL = 11
 
-FONT_QUESTION = (FONT_FAMILY, FONT_SIZE_QUESTION)
+FONT_QUESTION = (FONT_FAMILY, FONT_SIZE_QUESTION, "bold")
 FONT_OPTION = (FONT_FAMILY, FONT_SIZE_OPTION)
 FONT_BUTTON = (FONT_FAMILY, FONT_SIZE_BUTTON)
 FONT_SMALL = (FONT_FAMILY, FONT_SIZE_SMALL)
+FONT_OPTION_BOLD = (FONT_FAMILY, FONT_SIZE_OPTION, "bold")
 
 DEFAULT_MENU_SIZE = "500x300"
 DEFAULT_QUIZ_SIZE = "1500x600"
@@ -406,32 +407,47 @@ class QuizApp:
         options_frame = ttk.Frame(self.root)
         options_frame.pack(fill='both', expand=True, padx=20, pady=10)
         self.vars = []
+        self.checkbuttons = []
+
+        def update_font(index):
+            var = self.vars[index]
+            cb = self.checkbuttons[index]
+            cb.config(font=FONT_OPTION_BOLD if var.get() else FONT_OPTION)
 
         if not q.shuffled_options:
             ttk.Label(options_frame, text="No options available for this question.", font=FONT_OPTION).pack(anchor='w',
                                                                                                             padx=40,
                                                                                                             pady=4)
         else:
-            for i, (opt_text, _) in enumerate(q.shuffled_options):  # opt_text is "a. Option content"
+            for i, (opt_text, _) in enumerate(q.shuffled_options):
                 var = tk.IntVar(value=0)
-                # Display text for checkbutton should be just "Option content"
-                cb_text = opt_text
-                match = re.match(r"^[a-j]\.\s*(.*)", opt_text)
-                if match:
-                    cb_text = match.group(1)
 
-                cb = ttk.Checkbutton(options_frame, text=cb_text, variable=var, style="Quiz.TCheckbutton")
+                match = re.match(r"^[a-j]\.\s*(.*)", opt_text)
+                cb_text = match.group(1) if match else opt_text
+
+                cb = tk.Checkbutton(options_frame, text=cb_text, variable=var,
+                                    font=FONT_OPTION, anchor='w', justify='left',
+                                    bg=self.root["bg"], fg=self.default_fg_color,
+                                    selectcolor=self.root["bg"],
+                                    activebackground=self.root["bg"],
+                                    activeforeground=self.default_fg_color,
+                                    command=lambda idx=i: update_font(idx))
                 cb.pack(anchor='w', padx=40, pady=4)
                 self.vars.append(var)
+                self.checkbuttons.append(cb)
 
         if preserve_vars:
             if self.current_question_index < len(self.user_answers) and self.user_answers[self.current_question_index]:
                 current_answers = self.user_answers[self.current_question_index]
                 for i, var_value in enumerate(current_answers):
-                    if i < len(self.vars): self.vars[i].set(var_value)
+                    if i < len(self.vars):
+                        self.vars[i].set(var_value)
+                        self.checkbuttons[i].config(font=FONT_OPTION_BOLD if var_value else FONT_OPTION)
             elif self.saved_vars:
                 for i, var_value in enumerate(self.saved_vars):
-                    if i < len(self.vars): self.vars[i].set(var_value)
+                    if i < len(self.vars):
+                        self.vars[i].set(var_value)
+                        self.checkbuttons[i].config(font=FONT_OPTION_BOLD if var_value else FONT_OPTION)
             self.saved_vars = []
 
         nav_frame = ttk.Frame(self.root)
@@ -689,8 +705,9 @@ class QuizApp:
         hours, remainder = divmod(self.elapsed_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         time_str = ""
-        if hours > 0: time_str += f"{hours:02d}:"
-        time_str += f"{minutes:02d}:{seconds:02d}"
+        if hours > 0: time_str += f"{hours:02d} h : "
+        if minutes > 0: time_str += f"{minutes:02d} m : "
+        time_str += f"{seconds:02d} s"
 
         if self.timer_label and self.timer_label.winfo_exists():
             self.timer_label.config(text=f"Time: {time_str}")
