@@ -8,7 +8,8 @@
 # fitness for a particular purpose and noninfringement. In no event shall the
 # authors or copyright holders be liable for any claim, damages or other
 # liability, whether in an action of contract, tort or otherwise, arising from,
-# out of or in connection with the Software or the use or other dealings in the
+# out of or in connection with the
+# Software or the use or other dealings in the
 # Software.
 #
 # LICENSE TERMS:
@@ -47,6 +48,7 @@ import random
 import re
 import time
 import json
+import datetime
 
 
 class Question:
@@ -128,6 +130,8 @@ class QuizApp:
         self.num_questions = 5
         self.start_time = 0
         self.is_presented = False
+        # Added quiz file name
+        self.quiz_file_name = "N/A"
 
         self.user_name_for_copyright = "Capatina Nicolae"
         self.current_year_for_copyright = time.strftime("%Y")
@@ -198,6 +202,48 @@ class QuizApp:
                 json.dump(settings, f)
         except IOError:
             print("Error: Could not save theme settings.")
+
+    def save_results(self, score, total_possible, grade, duration, quiz_file_name, num_questions_attempted, timestamp):
+        results_data = []
+        try:
+            with open('results.cfg', 'r') as f:
+                results_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # File doesn't exist or is empty/corrupt, start with an empty list
+            results_data = []
+
+        new_result = {
+            'timestamp': timestamp,
+            'quiz_file': quiz_file_name,
+            'score': score,
+            'total_possible': total_possible,
+            'grade': grade,
+            'duration_seconds': duration,
+            'num_questions_attempted': num_questions_attempted,
+            'questions_breakdown': []
+        }
+
+        # Add details for each question attempted
+        for i, (q, user_res) in enumerate(self.user_answers):
+            correct_res = [is_c for _, is_c in q.shuffled_options]
+            question_info = {
+                'original_q_number': q.q_number,
+                'question_text': q.text,
+                'type': q.type,
+                'shuffled_options': [(opt_text, is_c) for opt_text, is_c in q.shuffled_options],
+                'user_selection': user_res,
+                'correct_answers': correct_res,
+                'score_for_this_question': self.scores_breakdown[i]
+            }
+            new_result['questions_breakdown'].append(question_info)
+
+        results_data.append(new_result)
+
+        try:
+            with open('results.cfg', 'w') as f:
+                json.dump(results_data, f, indent=4)
+        except IOError:
+            print("Error: Could not save quiz results.")
 
     def get_theme_color(self, key, default='black'):
         return self.current_theme.get(key, default)
@@ -294,7 +340,10 @@ class QuizApp:
             file_path = dialogs.pick_document(types=['public.text'])
             if file_path:
                 self.questions = parse_questions_from_file(file_path)
-                dialogs.alert('Loaded', f'{len(self.questions)} questions loaded.', button1='OK')
+                # Store the file name
+                self.quiz_file_name = file_path.split('/')[-1]
+                dialogs.alert('Loaded', f'{len(self.questions)} questions loaded from {self.quiz_file_name}.',
+                              button1='OK')
         except Exception as e:
             dialogs.alert('Error', f'Failed to load or parse the file.\n\n{e}', button1='OK')
 
@@ -477,10 +526,17 @@ class QuizApp:
         total_possible = len(self.quiz_questions) * 5 if self.quiz_questions else 0
         grade = self.calculate_grade(self.score, total_possible)
         time_str = self.format_time(duration)
-        summary = f'Quiz Completed!\nScore: {self.score}/{total_possible}\nGrade: {grade}\nTime: {time_str}'
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Save results before displaying the score
+        self.save_results(self.score, total_possible, grade, duration,
+                          self.quiz_file_name, len(self.quiz_questions), timestamp)
+
+        summary = (f'Quiz Completed!\nScore: {self.score}/{total_possible}\nGrade: {grade}\n'
+                   f'Time: {time_str}\nDate: {timestamp.split(" ")[0]}\nFile: {self.quiz_file_name}')
         score_lbl = ui.Label(text=summary, number_of_lines=0, alignment=ui.ALIGN_CENTER, font=('Helvetica', 20))
         score_lbl.text_color = self.get_theme_color('text')
-        score_lbl.frame = (20, 150, self.main_view.width - 40, 150)
+        score_lbl.frame = (20, 150, self.main_view.width - 40, 200) # Increased height to fit new info
         score_lbl.flex = 'W'
         self.main_view.add_subview(score_lbl)
 
@@ -488,7 +544,7 @@ class QuizApp:
         review_btn.background_color = self.get_theme_color('button_bg')
         review_btn.tint_color = self.get_theme_color('button_text')
         review_btn.corner_radius = 8
-        review_btn.frame = (80, 330, self.main_view.width - 160, 50)
+        review_btn.frame = (80, 380, self.main_view.width - 160, 50) # Adjusted y-position
         review_btn.flex = 'W'
         review_btn.action = self.review_answers
         self.main_view.add_subview(review_btn)
@@ -497,7 +553,7 @@ class QuizApp:
         home_btn.background_color = self.get_theme_color('button_bg')
         home_btn.tint_color = self.get_theme_color('button_text')
         home_btn.corner_radius = 8
-        home_btn.frame = (80, 400, self.main_view.width - 160, 50)
+        home_btn.frame = (80, 450, self.main_view.width - 160, 50) # Adjusted y-position
         home_btn.flex = 'W'
         home_btn.action = lambda s: self.main_menu()
         self.main_view.add_subview(home_btn)
