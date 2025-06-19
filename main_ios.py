@@ -72,40 +72,23 @@ def parse_questions_from_file(file_path):
         return []
 
     questions = []
+    blocks = re.findall(r'(?s)(?m)^(?:\\s*)?(\d+)\.\s*(.*?)(?=\n(?:\\s*)?\d+\.\s*|\Z)', content.strip())
 
-    # This regex finds all blocks that start with a number (e.g., "1. ") at the beginning of a line.
-    # It captures the question number and the entire block content (question text + options).
-    # (?s) -> dot matches newline
-    # (?m) -> ^ matches start of line
-    # (\d+) -> captures the question number
-    # (.*?) -> non-greedily captures all content until the lookahead condition
-    # (?=\n\d+\.\s*|\Z) -> positive lookahead for the start of the next question or the end of the file
-
-    blocks = re.findall(r'(?s)(?m)^(\d+)\.\s*(.*?)(?=\n\d+\.\s*|\Z)', content.strip())
-
-    # `findall` returns a list of tuples, e.g., [('1', 'Question text...\n a. ...'), ('2', '...')]
     for q_number_str, block_content in blocks:
         q_number = int(q_number_str)
-
-        # The block_content contains the question text and all its options.
-        # We split it into lines to separate them.
         lines = block_content.strip().split('\n')
-
-        # The first line is the question text.
         question_text = lines[0].strip()
-
         options = []
-        # The remaining lines are the options.
+
         for line in lines[1:]:
             line = line.strip()
             if not line:
-                continue  # Skip any empty lines between options
+                continue
 
-            # This regex parses each option line, e.g., "a. [y] Some text"
-            match = re.match(r'^[a-j]\.\s+\[(y|x)\]\s+(.*)', line)
+            match = re.match(r'^[a-j]\.\s+(?:\\s*)?\[(y|x)\]\s+(.*)', line)
+
             if match:
                 correctness, text = match.groups()
-                # Store the option text and a boolean for correctness
                 options.append((text.strip(), correctness == 'y'))
 
         if question_text and options:
