@@ -259,7 +259,7 @@ class QuizApp:
             default_q_val = min(5, len(self.questions))
             if hasattr(self,
                        'num_questions_var') and self.num_questions_var.get() > 0 and self.num_questions_var.get() <= len(
-                    self.questions):
+                self.questions):
                 default_q_val = self.num_questions_var.get()
         elif hasattr(self, 'num_questions_var') and self.num_questions_var.get() > 0:
             default_q_val = self.num_questions_var.get()
@@ -386,6 +386,7 @@ class QuizApp:
         self.stop_elapsed_timer()
         for widget in self.root.winfo_children():
             widget.destroy()
+
         self.add_dark_mode_button()
 
         if not (0 <= self.current_question_index < len(self.quiz_questions)):
@@ -394,9 +395,19 @@ class QuizApp:
             self.show_score()
             return
 
-        self.timer_label = ttk.Label(self.root, text="", font=FONT_BUTTON)
-        self.timer_label.pack(pady=10)
+        # This frame will hold the centered labels
+        top_info_frame = ttk.Frame(self.root)
+        top_info_frame.pack(fill='x', pady=(10, 0), padx=20)
+
+        # Timer Label (packed first to appear on top)
+        self.timer_label = ttk.Label(top_info_frame, text="", font=FONT_BUTTON)
+        self.timer_label.pack(pady=(0, 2))  # .pack() centers it horizontally by default
         self.start_elapsed_timer()
+
+        # Question Number Label (packed second to appear below timer)
+        question_number_text = f"Question {self.current_question_index + 1} of {len(self.quiz_questions)}"
+        question_number_label = ttk.Label(top_info_frame, text=question_number_text, font=FONT_BUTTON)
+        question_number_label.pack(pady=(0, 5))
 
         q = self.quiz_questions[self.current_question_index]
         question_label_wraplength = max(300, self.root.winfo_width() - 40)
@@ -454,15 +465,20 @@ class QuizApp:
         nav_frame.pack(side='bottom', fill='x', padx=20, pady=20)
         nav_frame.columnconfigure(0, weight=1)
         nav_frame.columnconfigure(1, weight=0)
+        nav_frame.columnconfigure(2, weight=1)  # Spacer column
         nav_frame.columnconfigure(3, weight=0)
         nav_frame.columnconfigure(4, weight=1)
 
-        next_btn = ttk.Button(nav_frame, text="Next ➡️", command=self.next_question, style="TButton", takefocus=0)
+        next_btn = ttk.Button(nav_frame, text="Next", command=self.next_question, style="TButton", takefocus=0)
         next_btn.grid(row=0, column=3, padx=10)
         if self.current_question_index > 0:
-            prev_btn = ttk.Button(nav_frame, text="⬅️ Previous", command=self.prev_question, style="TButton",
+            prev_btn = ttk.Button(nav_frame, text="Previous", command=self.prev_question, style="TButton",
                                   takefocus=0)
             prev_btn.grid(row=0, column=1, padx=10)
+
+        # --- FIX: Lift the dark mode button to the top of the stacking order ---
+        if self.dark_mode_button:
+            self.dark_mode_button.lift()
 
     def next_question(self):
         while len(self.user_answers) <= self.current_question_index:
@@ -489,13 +505,11 @@ class QuizApp:
     def calculate_score(self):
         self.score = 0
         for q_index, q in enumerate(self.quiz_questions):
-            if not q.shuffled_options:  # Should not happen if questions are well-formed
+            if not q.shuffled_options:
                 self.scores_breakdown[q_index] = 0
                 continue
 
-            correctness_map_original = {text: correct for (text, correct) in q.options}
-            # Correct flags for the SHUFFLED options presented
-            shuffled_correct_flags = [opt_tuple[1] for opt_tuple in q.shuffled_options]  # Direct from shuffled_options
+            shuffled_correct_flags = [opt_tuple[1] for opt_tuple in q.shuffled_options]
             num_presented_options = len(shuffled_correct_flags)
 
             user_flags_for_q = []
@@ -509,8 +523,6 @@ class QuizApp:
             q_score = 0
             user_selected_shuffled_indices = [i for i, is_selected in enumerate(user_flags_for_q) if is_selected]
 
-            # Get the actual correct option texts from the original full list of options
-            # For CS, there should be only one option in shuffled_options that is truly correct from the original set
             true_correct_texts_in_shuffled = [
                 opt_text for opt_text, is_correct_in_original in q.shuffled_options if is_correct_in_original
             ]
@@ -521,12 +533,11 @@ class QuizApp:
                     if selected_option_text in true_correct_texts_in_shuffled:
                         q_score = 5
             else:  # CM
-                if not (2 <= len(user_selected_shuffled_indices) <= 4):  # Check number of selections
+                if not (2 <= len(user_selected_shuffled_indices) <= 4):
                     q_score = 0
                 else:
-                    q_score = 5  # Start with max points
+                    q_score = 5
                     for i in range(num_presented_options):
-                        # User selected it AND it was incorrect OR User did NOT select it AND it was correct
                         is_option_originally_correct = q.shuffled_options[i][1]
                         if (user_flags_for_q[i] and not is_option_originally_correct) or \
                                 (not user_flags_for_q[i] and is_option_originally_correct):
@@ -571,6 +582,10 @@ class QuizApp:
         ttk.Button(buttons_frame, text="🏠 Back to Menu", command=self.back_to_menu, style="TButton", takefocus=0).pack(
             pady=10, fill='x')
 
+        # --- FIX: Lift the dark mode button to the top of the stacking order ---
+        if self.dark_mode_button:
+            self.dark_mode_button.lift()
+
     def review_question(self, index):
         self.mode = 'review'
         self.stop_elapsed_timer()
@@ -592,35 +607,29 @@ class QuizApp:
         default_review_fg_color = self.default_fg_color
         content_frame = ttk.Frame(self.root)
         content_frame.pack(fill='both', expand=True, padx=20, pady=10)
-        content_bg_color = self.root.cget('bg')  # Should be same as label_bg_color
-
-        # --- Logic for Change 2: Display all original options ---
-        # q.options are all original options: list of (full_text, is_correct_bool)
-        # q.shuffled_options are those presented in quiz: list of (full_text, is_correct_bool)
-        # self.user_answers[index] are the user's 0/1 selections for q.shuffled_options
+        content_bg_color = self.root.cget('bg')
 
         presented_option_texts = {opt_tuple[0] for opt_tuple in q.shuffled_options} if q.shuffled_options else set()
 
         user_selections_for_presented_options = {}
         if q.shuffled_options and index < len(self.user_answers) and self.user_answers[index]:
-            current_q_user_selections = self.user_answers[index]  # List of 0/1
+            current_q_user_selections = self.user_answers[index]
             for i, (opt_text, _) in enumerate(q.shuffled_options):
                 if i < len(current_q_user_selections):
                     user_selections_for_presented_options[opt_text] = current_q_user_selections[i]
-                else:  # Should ideally not happen if data is consistent
+                else:
                     user_selections_for_presented_options[opt_text] = 0
 
-        if not q.options:  # Check if the question itself has any original options
+        if not q.options:
             tk.Label(content_frame, text="No original options were defined for this question.", font=FONT_OPTION,
                      bg=content_bg_color, fg=default_review_fg_color).pack(anchor='w', padx=40, pady=2)
         else:
             for original_opt_text, is_original_correct in q.options:
                 mark = ""
-                text_color_for_option = default_review_fg_color  # Default
+                text_color_for_option = default_review_fg_color
                 display_text_suffix = ""
 
                 if original_opt_text in presented_option_texts:
-                    # This option was presented to the user
                     selected_by_user = user_selections_for_presented_options.get(original_opt_text, 0)
 
                     if is_original_correct and selected_by_user:
@@ -633,20 +642,16 @@ class QuizApp:
                         mark = "🟠"
                         text_color_for_option = "orange"
                     elif not is_original_correct and not selected_by_user:
-                        mark = ""  # Correctly not selected, default color
+                        mark = ""
                 else:
-                    # This option was NOT presented in this specific quiz instance
-                    mark = ""  # Symbol for not presented
-                    text_color_for_option = self.disabled_fg_color  # Use disabled color
+                    mark = ""
+                    text_color_for_option = self.disabled_fg_color
                     display_text_suffix = ""
 
-                # original_opt_text is like "a. Option content"
                 full_display_text = f"{mark} {original_opt_text}{display_text_suffix}"
                 lbl = tk.Label(content_frame, text=full_display_text, font=FONT_OPTION, fg=text_color_for_option,
                                bg=content_bg_color, anchor='w', justify='left')
                 lbl.pack(anchor='w', padx=40, pady=2)
-
-        # --- End of Change 2 logic ---
 
         def create_legend_label(parent, text_symbol, specific_fg_color):
             lbl = tk.Label(parent, text=text_symbol, font=FONT_SMALL, fg=specific_fg_color, bg=label_bg_color)
@@ -673,15 +678,19 @@ class QuizApp:
         nav_frame.columnconfigure(4, weight=1)
 
         if index > 0:
-            prev_btn = ttk.Button(nav_frame, text="⬅️ Previous", command=lambda: self.review_question(index - 1),
+            prev_btn = ttk.Button(nav_frame, text="Previous", command=lambda: self.review_question(index - 1),
                                   style="TButton", takefocus=0)
             prev_btn.grid(row=0, column=1, padx=10, sticky='e')
         score_btn = ttk.Button(nav_frame, text="Back to Score", command=self.show_score, style="TButton", takefocus=0)
         score_btn.grid(row=0, column=2, padx=10, sticky='nsew')
         if index < len(self.quiz_questions) - 1:
-            next_btn = ttk.Button(nav_frame, text="Next ➡️", command=lambda: self.review_question(index + 1),
+            next_btn = ttk.Button(nav_frame, text="Next", command=lambda: self.review_question(index + 1),
                                   style="TButton", takefocus=0)
             next_btn.grid(row=0, column=3, padx=10, sticky='w')
+
+        # --- FIX: Lift the dark mode button to the top of the stacking order ---
+        if self.dark_mode_button:
+            self.dark_mode_button.lift()
 
     def start_another_quiz(self):
         self.root.geometry(DEFAULT_MENU_SIZE)  # Reset to menu size
@@ -705,9 +714,9 @@ class QuizApp:
         hours, remainder = divmod(self.elapsed_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         time_str = ""
-        if hours > 0: time_str += f"{hours:02d} h : "
-        if minutes > 0: time_str += f"{minutes:02d} m : "
-        time_str += f"{seconds:02d} s"
+        if hours > 0: time_str += f"{hours:02d}h:"
+        if minutes > 0 or hours > 0: time_str += f"{minutes:02d}m:"
+        time_str += f"{seconds:02d}s"
 
         if self.timer_label and self.timer_label.winfo_exists():
             self.timer_label.config(text=f"Time: {time_str}")
