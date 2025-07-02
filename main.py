@@ -3,6 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import random
 import re
 import os
+import sys
 
 # === CONFIGURABLE UI CONSTANTS ===
 FONT_FAMILY = "Helvetica"
@@ -20,6 +21,14 @@ FONT_OPTION_BOLD = (FONT_FAMILY, FONT_SIZE_OPTION, "bold")
 DEFAULT_MENU_SIZE = "500x300"
 DEFAULT_QUIZ_SIZE = "1500x600"
 WINDOW_SIZE_FILE = "window_size.cfg"
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 class Question:
@@ -66,6 +75,7 @@ def parse_questions_from_file(file_path):
 class QuizApp:
     def __init__(self, root):
         self.root = root
+        self.root.iconbitmap(resource_path("new_icon.ico"))
         self.root.title("Nicolae's Quiz App")
         self.root.geometry(DEFAULT_MENU_SIZE)
 
